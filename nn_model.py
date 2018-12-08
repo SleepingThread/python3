@@ -4,6 +4,10 @@ class Simple(object):
         self.b = 12
         return
 
+
+import copy
+import numpy as np
+
 def isinstance_fromlist(o,inst_list):
     for inst in inst_list:
         if isinstance(o,inst):
@@ -51,12 +55,66 @@ def set_keras_layer(storage,layer,types_to_copy,verbose=1):
         
     return
 
+"""
+iterate over dict-list storage
+"""
+def iterate(storage,path=[]):
+    if isinstance(storage,dict):
+        res = {}
+        for key in storage:
+            _new_path = list(path)
+            _new_path.append(key)
+            for _path,el2 in iterate(storage[key],path=_new_path):
+                yield (_path,el2)
+    elif isinstance(storage,list):
+        for ind,el in enumerate(storage):
+            _new_path = list(path)
+            _new_path.append(ind)
+            for _path,el2 in iterate(el,path=_new_path):
+                yield (el2,)
+    else:
+        yield (path,storage)
+    
+    return
+
+"""
+    Warning: some operations require filter for applying, i.e.
+        not all keys, not all types operation need to be applied
+"""
+def apply_operation(op,args,path=[],verbose=2):
+    """
+    Iteratively apply operation <op> to list of <args>
+        Used for applying operations to lists and dicts
+        
+    Iterates over args[0]
+    Stores result in res
+    """
+    arg0 = args[0]
+    
+    res = None
+    
+    if isinstance(arg0,dict):
+        res = {}
+        for key in arg0:
+            _new_path = list(path)
+            _new_path.append(key)
+            if reduce(lambda _a,_v: _a and _v,[key in _arg for _arg in args],True):
+                res[key] = apply_operation(op,[_arg[key] for _arg in args],path=_new_path)
+            else:
+                if verbose>1:
+                    print "Skip ",key
+    elif isinstance(arg0,list):
+        res = []
+        for ind,el in enumerate(zip(*args)):
+            _new_path = list(path)
+            _new_path.append(ind)
+            res.append(apply_operation(op,el,path=_new_path))
+    else:
+        res = op(path,*args)
+    
+    return res
+
 class NNModel(object):
-    """
-    Usage:
-        n_model = NNModel().fromKeras(model)
-        nn_model.toKeras(model)
-    """
     def __init__(self):
         self.storage = {}
         return
@@ -89,7 +147,33 @@ class NNModel(object):
                 if verbose>0:
                     print "-",layer.name," not exists in storage"
         return self
-
+    
+    def __call__(self,path):
+        path_root = self.storage
+        for el in path:
+            path_root = path_root[el]
+            
+        return path_root
+    
+    def __sub__(self,nn_model,names=None,verbose=0):
+        """
+        If names - None, then substract all elements of type np.array
+        """
+        new_nn_model = copy.deepcopy(self)
+        new_nn_model.storage = apply_operation(lambda _path,_a,_b: _a-_b,[self.storage,nn_model.storage])
+        return new_nn_model
+    
+    def __add__(self,nn_model,names=None):
+        """
+        If names - None, then substract all elements of type np.array
+        """
+        new_nn_model = copy.deepcopy(self)
+        storage = apply_operation(lambda _path,_a,_b: _a+_b,[self.storage,nn_model.storage])
+        return new_nn_model
+    
+    def apply_operation(self,op,verbose=2):
+        return apply_operation(op,[self.storage],verbose=2)
+        
 """
     def __getattr__(self,name):
         print "Call for ",name
@@ -126,9 +210,9 @@ class Model(object):
         return
 
     def __getitem__(self,name):
-        """
-        For generic types (why generic?) - like dict,list
-        """
+        #
+        # For generic types (why generic?) - like dict,list
+        #
         print "FIND ",name," FOR ME!"
         return
 
