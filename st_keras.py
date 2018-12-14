@@ -212,7 +212,7 @@ class NNModel(object):
         graph = nx.drawing.nx_pydot.to_pydot(self.graph)
         
         for _node in graph.get_nodes():
-            _name = _node.get_name()
+            _name = _node.get_name().strip('"')
 
             _config = self.graph.nodes[_name]["config"]["config"]
             _label1 = _name+" : "+self.graph.nodes[_name]["config"]["class_name"]
@@ -262,8 +262,20 @@ class NNModel(object):
         
         return
     """
-    
-def draw_weights(nn_model,layers=None,names=None,color_list=None):
+
+def minmaxWindow(array,w_size):
+    if w_size<0:
+        raise Exception("Window must be >= 0")
+
+    new_array = []
+    array = array.reshape((-1,))
+    for ind in range(0,array.shape[0],w_size):
+        _window = array[ind*w_size:(ind+1)*w_size]
+        new_array.extend([np.min(_window),np.max(_window)])
+
+    return np.array(new_array)
+
+def draw_weights(nn_model,layers=None,names=None,color_list=None,w_size=100):
     """
     :param layers: List of layer names for drawing
     :param names: List of weight names
@@ -285,11 +297,11 @@ def draw_weights(nn_model,layers=None,names=None,color_list=None):
         for _path,_weight in iterate(nn_model.graph.nodes[_node]["weights"]):
             _depth = nn_model.graph.nodes[_node]["depth"]
             if names is None:
-                array_list.append(_weight)
+                array_list.append(minmaxWindow(_weight,w_size))
                 labels_list.append(_node+" : "+str(_depth)+"\n"+_path[-1])
                 array_depth.append(nn_model.graph.nodes[_node]["depth"])
             elif _path[-1] in names:
-                array_list.append(_weight)
+                array_list.append(minmaxWindow(_weight,w_size))
                 labels_list.append(_node+" : "+str(_depth)+"\n"+_path[-1])
                 array_depth.append(nn_model.graph.nodes[_node]["depth"])
                 
